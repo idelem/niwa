@@ -9,6 +9,7 @@
   --bg:#eceee6; --fg:#1d241f; --hl:#2c6e8f;
   --dim:color-mix(in srgb, var(--fg) 48%, var(--bg));
   --faint:color-mix(in srgb, var(--fg) 10%, var(--bg));
+  --light:#eceee6;
   --rows:8;
   --gut:3.4rem;
   box-sizing:border-box;
@@ -54,6 +55,7 @@ input:focus,textarea:focus{background:var(--faint)}
 .cell:empty:hover::after{content:"+";color:var(--dim)}
 .rl{min-width:0;display:flex;align-items:center;cursor:pointer;line-height:1.75em}
 .rl .t{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rl a.t{color:inherit;text-decoration:none}
 .rl .x{display:none;color:var(--dim);padding:0 .2em}
 .rl:hover .x{display:block}
 .rl .x:hover{color:var(--hl)}
@@ -89,6 +91,7 @@ input:focus,textarea:focus{background:var(--faint)}
 .md p,.md ul,.md ol,.md blockquote,.md pre{margin:.5em 0}
 .md ul,.md ol{padding-left:1.4em}
 .md a{color:var(--hl)}
+.md a.ghost{color:var(--dim);font-style:italic}
 .md code{font:.88em ui-monospace,Menlo,Consolas,monospace;background:var(--faint);padding:.1em .3em}
 .md pre{background:var(--faint);padding:.6em .8em;overflow-x:auto}
 .md pre code{background:none;padding:0}
@@ -99,10 +102,20 @@ input:focus,textarea:focus{background:var(--faint)}
 .md th,.md td{padding:.25em .8em;text-align:left}
 .md th{background:var(--faint)}
 .pic{display:block;max-width:100%;height:auto}
+.duo{display:block;width:fit-content;max-width:100%;background:var(--light);isolation:isolate;line-height:0}
+.duo img,.duo canvas{mix-blend-mode:multiply}
 .pic.px{image-rendering:pixelated}
 .bimg{padding:.2rem 0}
+.bimg:focus{background:var(--faint)}
 .bimg .bact{display:none;gap:.25rem;margin-top:.3rem}
 .blk:hover .bimg .bact,.bimg.empty .bact{display:flex}
+
+/* backlinks */
+.back{margin-top:2rem;color:var(--dim)}
+.back .bh{margin-bottom:.3rem}
+.bl{padding:.15rem 0;cursor:pointer}
+.bl:hover{color:var(--hl)}
+.bl .sn{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 
 /* footer */
 .btns{display:flex;gap:.25rem;flex-shrink:0}
@@ -146,7 +159,7 @@ input[type=range]{width:11rem;accent-color:var(--hl);cursor:pointer}
 
 /* image dialog */
 .prevbox{max-height:48vh;overflow:auto;margin-bottom:1rem;scrollbar-width:thin;scrollbar-color:var(--dim) transparent}
-.prev{display:block;max-width:100%;background:var(--faint)}
+.prev{display:block;max-width:100%}
 .lab{display:inline-block;min-width:4.5rem;color:var(--dim)}
 .val{display:inline-block;min-width:2.5rem;color:var(--dim);text-align:right}
 
@@ -228,7 +241,11 @@ function h(tag,props,...kids){
   kids.flat().forEach(c=>{ if(c!=null&&c!==false) el.append(c.nodeType?c:String(c)); });
   return el;
 }
-const sanitize=s=>(s||"").trim().replace(/[\s\/\\#?%]+/g,"-").replace(/^-+|-+$/g,"");
+const sanitize=s=>(s||"").trim().replace(/[\s\/\\#?%()\[\]<>]+/g,"-").replace(/^-+|-+$/g,"");
+const SCHEME=/^[a-z][a-z0-9+.-]*:/i;
+const escRe=s=>s.replace(/[.*+?^${}()|[\]\\]/g,"\\$&");
+const hostOf=u=>{ try{ return new URL(u).hostname.replace(/^www\./,""); }catch(e){ return u; } };
+function linkTarget(href){ let t=href.trim(); try{ t=decodeURIComponent(t); }catch(e){} return t.replace(/^\.\//,""); }
 const now=()=>Date.now();
 const chw=s=>[...s].reduce((n,c)=>n+(c.charCodeAt(0)>255?2:1),0)+1;
 const isComposing=e=>e.isComposing||e.keyCode===229;
@@ -243,10 +260,16 @@ const PRESETS={
   "夜":{bg:"#14171a",fg:"#cfd5cf",hl:"#8fc1d4"}
 };
 let theme=null;
+function lum(hex){
+  const m=/^#?([0-9a-f]{6})$/i.exec(hex); if(!m) return 0;
+  const n=parseInt(m[1],16), f=c=>{ c/=255; return c<=.03928?c/12.92:Math.pow((c+.055)/1.055,2.4); };
+  return .2126*f((n>>16)&255)+.7152*f((n>>8)&255)+.0722*f(n&255);
+}
 function setTheme(t,save=true){
   theme={bg:t.bg,fg:t.fg,hl:t.hl};
   const s=document.documentElement.style;
   s.setProperty("--bg",t.bg); s.setProperty("--fg",t.fg); s.setProperty("--hl",t.hl);
+  s.setProperty("--light",lum(t.bg)>=lum(t.fg)?t.bg:t.fg);   // lighter of fg/bg: multiplied over images
   if(save) store.set("niwa.theme",JSON.stringify(theme));
 }
 function loadTheme(){
@@ -480,23 +503,28 @@ const byTitle=(a,b)=>a.title.localeCompare(b.title,"zh",{numeric:true});
 const childrenOf=slug=>[...pages.values()].filter(p=>p.parent===slug&&p.slug!==ROOT).sort(byTitle);
 const pageText=p=>p.blocks.filter(b=>b.type==="text").map(b=>b.text).join("\n");
 function resolve(raw){
+  const t=raw.trim();
+  if(pages.has(t)) return t;
   const s=sanitize(raw);
   if(pages.has(s)) return s;
-  const t=raw.trim(), m=[...pages.values()].filter(p=>p.title===t);
+  const m=[...pages.values()].filter(p=>p.title===t);
   return m.length===1?m[0].slug:s;
 }
 function normRel(arr){
   const out=[], used=new Set(), pending=[];
   for(const x of (Array.isArray(arr)?arr:[])){
-    const to=typeof x==="string"?x:(x&&x.to);
-    if(typeof to!=="string"||!to) continue;
-    const ok=x&&Number.isInteger(x.r)&&Number.isInteger(x.c)&&x.r>=0&&x.c>=0&&x.c<GC&&!used.has(x.r+","+x.c);
-    if(ok){ used.add(x.r+","+x.c); out.push({to,r:x.r,c:x.c}); } else pending.push(to);
+    let e=null;
+    if(typeof x==="string"){ if(x) e={to:x}; }
+    else if(x&&typeof x.url==="string"&&/^https?:\/\/\S+$/i.test(x.url)) e={url:x.url,label:(typeof x.label==="string"&&x.label)||hostOf(x.url)};
+    else if(x&&typeof x.to==="string"&&x.to) e={to:x.to};
+    if(!e) continue;
+    const ok=x&&typeof x==="object"&&Number.isInteger(x.r)&&Number.isInteger(x.c)&&x.r>=0&&x.c>=0&&x.c<GC&&!used.has(x.r+","+x.c);
+    if(ok){ used.add(x.r+","+x.c); out.push({...e,r:x.r,c:x.c}); } else pending.push(e);
   }
   let r=0,c=0;
-  for(const to of pending){
+  for(const e of pending){
     while(used.has(r+","+c)){ c++; if(c>=GC){c=0;r++;} }
-    used.add(r+","+c); out.push({to,r,c});
+    used.add(r+","+c); out.push({...e,r,c});
   }
   return out;
 }
@@ -543,6 +571,23 @@ function createPage(raw,parent){
   go(slug);
   return true;
 }
+function rewriteLinks(text,old,nw){
+  const alts=[...new Set([old,encodeURIComponent(old),encodeURI(old)])].map(escRe).join("|");
+  const re=new RegExp("\\]\\(\\s*(?:\\./)?(?:"+alts+")\\s*\\)","g");
+  let fence=false;
+  return text.split("\n").map(line=>{
+    if(/^\s*```/.test(line)){ fence=!fence; return line; }
+    return fence?line:line.replace(re,()=>"]("+nw+")");
+  }).join("\n");
+}
+function fixBlocks(p,old,nw){
+  let ch=false;
+  for(const b of p.blocks) if(b.type==="text"){
+    const t=rewriteLinks(b.text,old,nw);
+    if(t!==b.text){ b.text=t; ch=true; }
+  }
+  return ch;
+}
 function renameSlug(old,nw){
   flushDirty();
   const put=[], del=[]; let refs=0;
@@ -551,10 +596,12 @@ function renameSlug(old,nw){
     let q=p, ch=false;
     if(p.parent===old){ q={...q,parent:nw}; ch=true; }
     if(p.related.some(r=>r.to===old)){ q={...q,related:p.related.map(r=>r.to===old?{...r,to:nw}:r)}; ch=true; }
+    if(fixBlocks(p,old,nw)) ch=true;
     if(ch){ put.push(q); refs++; }
   }
   const src=pages.get(old);
   if(src){
+    fixBlocks(src,old,nw);
     del.push(old);
     put.push({...src,slug:nw,title:src.title===old?nw:src.title,updated:now()});
   }
@@ -596,8 +643,24 @@ function deletePage(slug){
   setStatus(`已删除「${p.title}」`);
   go(target);
 }
+function parseLinkInput(raw){
+  let m=/^\[([^\]]*)\]\(\s*(https?:\/\/[^)\s]+)\s*\)$/i.exec(raw);
+  if(m) return {url:m[2],label:m[1].trim()||hostOf(m[2])};
+  if(/^https?:\/\/\S+$/i.test(raw)) return {url:raw,label:hostOf(raw)};
+  m=/^\[[^\]]*\]\(\s*([^)\s]+)\s*\)$/.exec(raw);
+  if(m) return {to:resolve(linkTarget(m[1]))};
+  return {to:resolve(raw)};
+}
 function addLink(r,c,raw){
-  const to=resolve(raw);
+  const p=parseLinkInput(raw.trim());
+  if(p.url){
+    const m=ensure(curSlug);
+    if(m.related.some(x=>x.url===p.url)){ setStatus("已经有这个链接了"); return false; }
+    m.related.push({url:p.url,label:p.label,r,c}); touch(m);
+    render();
+    return true;
+  }
+  const to=p.to;
   if(!to){ setStatus("链接名无效"); return false; }
   if(to===curSlug){ setStatus("不能链接到自己"); return false; }
   const m=ensure(curSlug);
@@ -628,7 +691,7 @@ function insertBlock(pos,type,opts={}){
   const m=editable();
   const b=type==="text"?{id:uid(),type:"text",text:opts.text||""}:{id:uid(),type:"image",img:opts.img||null};
   m.blocks.splice(Math.max(0,Math.min(pos,m.blocks.length)),0,b); touch(m);
-  renderBlocks({focusId:type==="text"?b.id:null,caret:"end"});
+  renderBlocks({focusId:(type==="text"||!opts.img)?b.id:null,caret:"end"});
   return b;
 }
 let lastDeleted=null, undoT=null;
@@ -909,11 +972,16 @@ function renderRel(m){
     g.append(cell);
   }
   m.related.forEach((x,i)=>{
-    const ex=pages.get(x.to);
-    const el=h("div.rl"+(ex?"":".ghost"),{"data-slug":x.to,title:x.to,draggable:true,style:place(x.r,x.c),
+    const ext=!!x.url, ex=ext?null:pages.get(x.to);
+    const body=ext
+      ? h("a.t",{href:x.url,target:"_blank",rel:"noopener noreferrer",title:x.url},x.label,h("span.dim",null," ↗"))
+      : h("span.t",{onclick:()=>go(x.to)},ex?ex.title:x.to);
+    if(ext) body.setAttribute("draggable","false");
+    const el=h("div.rl"+(ext?".ext":(ex?"":".ghost")),{title:ext?x.url:x.to,draggable:true,style:place(x.r,x.c),
       ondragstart:e=>{ e.dataTransfer.setData("text/plain",String(i)); e.dataTransfer.effectAllowed="move"; }},
-      h("span.t",{onclick:()=>go(x.to)},ex?ex.title:x.to),
+      body,
       h("button.x",{type:"button",title:"移除链接",onclick:e=>{ e.stopPropagation(); removeLink(i); }},"×"));
+    if(!ext) el.dataset.slug=x.to;
     dropOn(el,x.r,x.c);
     g.append(el);
   });
@@ -928,7 +996,7 @@ function miniMD(src){
     if(/^`[^`]+`$/.test(part)) return "<code>"+esc(part.slice(1,-1))+"</code>";
     let t=esc(part);
     t=t.replace(/\*\*([^*]+)\*\*/g,"<strong>$1</strong>").replace(/\*([^*]+)\*/g,"<em>$1</em>").replace(/~~([^~]+)~~/g,"<del>$1</del>");
-    return t.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g,(m,a,u)=>/^(https?:|mailto:|#)/i.test(u)?'<a href="'+u+'">'+a+"</a>":m);
+    return t.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g,(m,a,u)=>(/^(https?:|mailto:|#)/i.test(u)||!SCHEME.test(u))?'<a href="'+u+'">'+a+"</a>":m);
   }).join("");
   const LI=/^\s*[-*+]\s+/, OL=/^\s*\d+[.)]\s+/;
   const lines=src.replace(/\r\n?/g,"\n").split("\n"), out=[];
@@ -966,7 +1034,12 @@ function renderMD(el,text){
   }
   el.innerHTML=html!==null?html:miniMD(text);
   el.querySelectorAll("a[href]").forEach(a=>{
-    if(/^https?:/i.test(a.getAttribute("href"))){ a.target="_blank"; a.rel="noopener noreferrer"; }
+    const href=a.getAttribute("href")||"";
+    if(/^https?:/i.test(href)){ a.target="_blank"; a.rel="noopener noreferrer"; }
+    else if(!SCHEME.test(href)&&href[0]!=="#"){          // internal wiki link: [text](slug)
+      const t=linkTarget(href);
+      if(t){ a.dataset.wiki=t; a.title=t; if(!pages.has(t)) a.classList.add("ghost"); }
+    }
   });
 }
 
@@ -1004,6 +1077,49 @@ function insRow(pos,always){
       h("button.bt",{type:"button",title:"插入文本块",onclick:()=>insertBlock(pos,"text")},"+"),
       h("button.bt",{type:"button",title:"插入图片块",onclick:()=>insertBlock(pos,"image")},"图")));
 }
+function scanLinks(text,cb){
+  let fence=false;
+  for(const line of text.split("\n")){
+    if(/^\s*```/.test(line)){ fence=!fence; continue; }
+    if(fence) continue;
+    const re=/(!?)\[([^\]]*)\]\(\s*([^)\s]+)\s*\)/g; let m;
+    while((m=re.exec(line))){
+      if(m[1]) continue;                                   // image, not a link
+      const href=m[3];
+      if(SCHEME.test(href)||href[0]==="#") continue;       // external or in-page
+      const t=linkTarget(href); if(t) cb(t,line);
+    }
+  }
+}
+function backlinksOf(slug){
+  const out=[];
+  for(const p of pages.values()){
+    if(p.slug===slug) continue;
+    const kinds=[]; let snip="";
+    if(p.related.some(r=>r.to===slug)) kinds.push("相关链接");
+    let inline=false;
+    for(const b of p.blocks){
+      if(b.type!=="text") continue;
+      scanLinks(b.text,(t,line)=>{
+        if(t!==slug) return;
+        inline=true;
+        if(!snip) snip=line.replace(/!?\[([^\]]*)\]\([^)]*\)/g,"$1").trim().slice(0,100);
+      });
+    }
+    if(inline) kinds.push("正文引用");
+    if(kinds.length) out.push({slug:p.slug,title:p.title,kinds,snip});
+  }
+  return out.sort(byTitle);
+}
+function backEl(slug){
+  const bl=backlinksOf(slug);
+  if(!bl.length) return null;
+  return h("div.back",null,
+    h("div.bh",null,`反向链接（${bl.length}）`),
+    bl.map(x=>h("div.bl",{onclick:()=>go(x.slug)},
+      h("div",null,x.title,h("span",null," · "+x.kinds.join("、"))),
+      x.snip?h("div.sn",null,x.snip):null)));
+}
 function renderBlocks(opts={}){
   const box=$("blocks"); if(!box) return;
   const m=pages.get(curSlug)||ghostOf(curSlug);
@@ -1011,6 +1127,7 @@ function renderBlocks(opts={}){
   ctl=new Map();
   const kids=[insRow(0,m.blocks.length===0)];
   m.blocks.forEach((b,i)=>{ kids.push(blockEl(b)); kids.push(insRow(i+1,false)); });
+  const bk=backEl(m.slug); if(bk) kids.push(bk);
   box.replaceChildren(...kids);
   box.scrollTop=scroll;
   box.querySelectorAll("textarea.bta").forEach(autosize);
@@ -1068,7 +1185,11 @@ function textBlock(b){
       if(n&&ctl.has(n.id)){ e.preventDefault(); ctl.get(n.id).edit("start"); }
     }
   });
-  view.addEventListener("click",e=>{ if(!e.target.closest("a")) toEdit("end"); });
+  view.addEventListener("click",e=>{
+    const a=e.target.closest("a");
+    if(a){ if(a.dataset.wiki){ e.preventDefault(); go(a.dataset.wiki); } return; }
+    toEdit("end");
+  });
   view.addEventListener("keydown",e=>{ if(e.key==="Enter"&&e.target===view){ e.preventDefault(); toEdit("end"); } });
   ctl.set(b.id,{edit:toEdit});
   if(b.text.trim()) toView(); else wrap.append(ta);
@@ -1088,14 +1209,28 @@ function imgEl(id){
   imgURL(id).then(u=>{ if(u) img.src=u; });
   return img;
 }
+const duoImg=id=>h("span.duo",null,imgEl(id));
 function imageBlock(b){
   const m=b.img&&imgMeta.get(b.img);
   const acts=h("div.bact",null,
     h("button.btn.sm",{type:"button",onclick:()=>pickFile(id=>setBlockImage(b.id,id))},"上传新图"),
     h("button.btn.sm",{type:"button",onclick:()=>openGallery(id=>setBlockImage(b.id,id))},"选择已有"));
-  if(m) return h("div.bimg",null,imgEl(b.img),acts);
-  return h("div.bimg.empty",null,h("div.dim",null,b.img?"这张图片已被删除":"空的图片块"),acts);
+  const wrap=h("div.bimg"+(m?"":".empty"),{tabindex:0,"data-bid":b.id});
+  if(m) wrap.append(duoImg(b.img),acts);
+  else wrap.append(h("div.dim",null,(b.img?"这张图片已被删除":"空的图片块")+" · 选中后按 Ctrl/Cmd+V 粘贴图片"),acts);
+  ctl.set(b.id,{edit:()=>wrap.focus()});
+  return wrap;
 }
+document.addEventListener("paste",e=>{
+  const t=e.target;
+  if(!t||!t.closest||t.closest("textarea,input")) return;
+  const wrap=t.closest(".bimg"); if(!wrap) return;
+  const f=[...((e.clipboardData&&e.clipboardData.files)||[])].find(f=>f.type.startsWith("image/"));
+  if(!f) return;
+  e.preventDefault();
+  const id=wrap.dataset.bid;
+  openImageDialog(f,img=>setBlockImage(id,img));
+});
 
 /* ---------- overlays: search / map / images / settings ---------- */
 const ov=$("ov");
@@ -1168,6 +1303,14 @@ async function openImageDialog(file,onDone){
 }
 function buildImageDialog(body,bmp,onDone){
   const st={mode:"dither",algo:"fs",levels:2,edge:640,bright:0,contrast:0};
+  try{
+    const sv=JSON.parse(store.get("niwa.imgopts")||"{}")||{};
+    if(["gray","dither"].includes(sv.mode)) st.mode=sv.mode;
+    if(["fs","atk","bayer"].includes(sv.algo)) st.algo=sv.algo;
+    if([2,4].includes(sv.levels)) st.levels=sv.levels;
+    if([320,480,640,800,1024,1600].includes(sv.edge)) st.edge=sv.edge;
+    for(const k of ["bright","contrast"]) if(Number.isFinite(sv[k])&&sv[k]>=-100&&sv[k]<=100) st[k]=sv[k];
+  }catch(e){}
   const bases={};
   const canvas=h("canvas.prev"), info=h("div.dim.msg");
   let timer=null, token=0, cur=null;
@@ -1194,8 +1337,8 @@ function buildImageDialog(body,bmp,onDone){
     return row;
   }
   function slider(name,key,only){
-    const val=h("span.val",null,"0");
-    const inp=h("input",{type:"range",min:-100,max:100,value:0,oninput:()=>{ st[key]=+inp.value; val.textContent=inp.value; sched(); }});
+    const val=h("span.val",null,String(st[key]));
+    const inp=h("input",{type:"range",min:-100,max:100,value:st[key],oninput:()=>{ st[key]=+inp.value; val.textContent=inp.value; sched(); }});
     return h("div.row",null,h("span.lab",null,name),inp,val);
   }
   function sync(){
@@ -1212,7 +1355,10 @@ function buildImageDialog(body,bmp,onDone){
     slider("亮度","bright"),
     slider("对比度","contrast")
   ];
+  let saving=false;
   async function save(){
+    if(saving) return; saving=true;
+    store.set("niwa.imgopts",JSON.stringify(st));
     clearTimeout(timer); run();
     const info2=cur;
     canvas.toBlob(async bl=>{
@@ -1222,15 +1368,17 @@ function buildImageDialog(body,bmp,onDone){
       closeOverlay(); onDone(id);
     },"image/png");
   }
+  const saveBtn=h("button.btn.go",{type:"button",onclick:save},"保存");
+  body.addEventListener("keydown",e=>{ if(e.key==="Enter"&&!isComposing(e)){ e.preventDefault(); save(); } });
   body.append(
-    h("div.prevbox",null,canvas),
+    h("div.prevbox",null,h("span.duo",null,canvas)),
     ...controls,
-    h("div.dim",null,"抖动图建议最大边不超过正文宽度（约 640），避免显示时被缩放。"),
+    h("div.dim",null,"抖动图建议最大边不超过正文宽度（约 640），避免显示时被缩放。按 Enter 保存。"),
     info,
     h("div.row",null,
-      h("button.btn.go",{type:"button",onclick:save},"保存"),
+      saveBtn,
       h("button.btn",{type:"button",onclick:closeOverlay},"取消")));
-  sync(); run();
+  sync(); run(); saveBtn.focus();
 }
 
 /* image gallery */
@@ -1264,7 +1412,7 @@ function buildGallery(body,pick){
       const count=used?[...used.values()].reduce((a,b)=>a+b,0):0;
       const card=h("div.gc");
       card.append(
-        h("div.gth"+(pick?".pk":""),{onclick:pick?()=>{ closeOverlay(); pick(m.id); }:null},imgEl(m.id)),
+        h("div.gth"+(pick?".pk":""),{onclick:pick?()=>{ closeOverlay(); pick(m.id); }:null},duoImg(m.id)),
         h("div.dim.gm",null,`${m.w}×${m.h} · ${fmtKB(m.bytes)} · ${count?count+" 处引用":"未引用"}`));
       if(used){
         const links=[...used.keys()].slice(0,3).map(s=>h("span.gl",{onclick:()=>go(s)},(pages.get(s)||{title:s}).title));
@@ -1403,7 +1551,7 @@ window.addEventListener("resize",()=>{ document.querySelectorAll("textarea.bta")
 
 if(window.__NIWA_TEST) window.__niwa={pages,imgMeta,go,createPage,renameSlug,setParent,deletePage,insertBlock,removeBlock,moveBlock,
   addLink,ditherOut,toneMap,grayOut,miniMD,normalize,normBlocks,renderMD,putImage,saveImage,imageUsage,dataURLToBlob,
-  cur:()=>curSlug,renderBlocks,BAYER8,exportJSON,hashBlob};
+  cur:()=>curSlug,renderBlocks,BAYER8,exportJSON,hashBlob,scanLinks,backlinksOf,rewriteLinks,normRel,parseLinkInput,sanitize,setTheme,lum};
 
 (async function init(){
   loadTheme();
