@@ -280,7 +280,7 @@ function lum(hex){
 function updateFavicon(t){
   try{
     const dk=lum(t.fg)<=lum(t.bg)?t.fg:t.bg, lt=dk===t.fg?t.bg:t.fg;
-    const svg="<svg xmlns='http://www.w3.org/2000/svg' viewBox='8 8 60 60'>"
+    const svg="<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'>"
       +"<style>.i{fill:"+dk+";stroke:"+dk+"}@media (prefers-color-scheme:dark){.i{fill:"+lt+";stroke:"+lt+"}}</style>"
       +'<path class="i" style="stroke-width: 12px; stroke-linecap: round; stroke-linejoin: round; fill: none;" d=""/><path class="i" style="stroke-width: 12px; stroke-linecap: round; stroke-linejoin: round; fill: none;" d=""/><path class="i" style="stroke-width: 9px; stroke-linecap: square; stroke-linejoin: round; fill: none;" d="M15,30 L15,30 L15,15 L30,30 L30,15 M45,15 L45,15 L45,30 M15,45 L15,45 L15,60 L30,45 L30,60 L45,45 M60,15 A15,45 0 0,1 45,60 M60,15 L60,15 L60,60 "/></svg>';
     let l=document.querySelector("link[rel='icon']");
