@@ -279,7 +279,7 @@ function lum(hex){
 // favicon: uses the darker of fg/bg when the browser is in light mode, the lighter one in dark mode
 function updateFavicon(t){
   try{
-    const dk=lum(t.fg)<=lum(t.bg)?t.fg:t.bg, lt=dk===t.fg?t.bg:t.fg;
+    const dk=t.hl, lt=t.hl;//lum(t.fg)<=lum(t.bg)?t.fg:t.bg, lt=dk===t.fg?t.bg:t.fg;
     const svg="<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 80 80'>"
       +"<style>.i{fill:"+dk+";stroke:"+dk+"}@media (prefers-color-scheme:dark){.i{fill:"+lt+";stroke:"+lt+"}}</style>"
       +'<path class="i" style="stroke-width: 6px; stroke-linecap: square; stroke-linejoin: round;" d="M60,15 A15,15 0 0,1 45,30 L75,30 A15,15 0 0,1 60,15 L60,15 A15,30 0 0,1 45,45 L75,45 A15,30 0 0,1 60,15 L60,15 A15,60 0 0,1 45,75 L75,75 A15,60 0 0,1 60,15 M30,15 A15,15 0 0,0 15,30 A15,15 0 0,0 30,45 A15,15 0 0,0 45,30 A15,15 0 0,0 30,15 M15,60 L15,60 L45,60 M15,75 L15,75 L45,75 "/></svg>';
