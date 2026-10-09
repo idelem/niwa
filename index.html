@@ -276,10 +276,24 @@ function lum(hex){
   const n=parseInt(m[1],16), f=c=>{ c/=255; return c<=.03928?c/12.92:Math.pow((c+.055)/1.055,2.4); };
   return .2126*f((n>>16)&255)+.7152*f((n>>8)&255)+.0722*f(n&255);
 }
+// favicon: uses the darker of fg/bg when the browser is in light mode, the lighter one in dark mode
+function updateFavicon(t){
+  try{
+    const dk=lum(t.fg)<=lum(t.bg)?t.fg:t.bg, lt=dk===t.fg?t.bg:t.fg;
+    const svg="<svg xmlns='http://www.w3.org/2000/svg' viewBox='8 8 60 60'>"
+      +"<style>.i{fill:"+dk+";stroke:"+dk+"}@media (prefers-color-scheme:dark){.i{fill:"+lt+";stroke:"+lt+"}}</style>"
+      +'<path class="i" style="stroke-width: 12px; stroke-linecap: round; stroke-linejoin: round; fill: none;" d=""/><path class="i" style="stroke-width: 12px; stroke-linecap: round; stroke-linejoin: round; fill: none;" d=""/><path class="i" style="stroke-width: 9px; stroke-linecap: square; stroke-linejoin: round; fill: none;" d="M15,30 L15,30 L15,15 L30,30 L30,15 M45,15 L45,15 L45,30 M15,45 L15,45 L15,60 L30,45 L30,60 L45,45 M60,15 A15,45 0 0,1 45,60 M60,15 L60,15 L60,60 "/></svg>';
+    let l=document.querySelector("link[rel='icon']");
+    if(!l){ l=document.createElement("link"); l.rel="icon"; document.head.append(l); }
+    l.type="image/svg+xml";
+    l.href="data:image/svg+xml,"+encodeURIComponent(svg);
+  }catch(e){}
+}
 function setTheme(t,save=true){
   theme={bg:t.bg,fg:t.fg,hl:t.hl};
   const s=document.documentElement.style;
   s.setProperty("--bg",t.bg); s.setProperty("--fg",t.fg); s.setProperty("--hl",t.hl);
+  updateFavicon(t);
   s.setProperty("--light",lum(t.bg)>=lum(t.fg)?t.bg:t.fg);   // lighter of fg/bg: multiplied over images
   if(save) store.set("niwa.theme",JSON.stringify(theme));
 }
