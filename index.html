@@ -108,6 +108,13 @@ input:focus,textarea:focus{background:var(--faint)}
 .bimg{padding:.2rem 0}
 .bimg:focus{background:var(--faint)}
 .bimg .bact{display:none;gap:.25rem;margin-top:.3rem}
+.cw{width:fit-content;max-width:100%;position:relative}
+.bimg:not(.empty) .bact{position:absolute;top:.3rem;right:.3rem;margin:0;background:var(--bg);z-index:1}
+.bimg:focus-within .bact{display:flex}
+.cap{display:block;width:100%;margin-top:.25rem;font-size:.85rem;color:var(--dim)}
+.cap:focus{color:var(--fg)}
+.cap:placeholder-shown{display:none}
+.blk:hover .bimg .cap:placeholder-shown,.bimg:focus-within .cap:placeholder-shown{display:block}
 .blk:hover .bimg .bact,.bimg.empty .bact{display:flex}
 
 /* backlinks */
@@ -1235,13 +1242,29 @@ function imgEl(id){
   return img;
 }
 const duoImg=id=>h("span.duo",null,imgEl(id));
+function capInput(id){
+  const m=imgMeta.get(id);
+  const inp=h("input.cap",{type:"text",value:(m&&m.name)||"",placeholder:"备注",spellcheck:false,autocomplete:"off","data-img":id,
+    onchange:()=>{
+      const mm=imgMeta.get(id); if(!mm) return;
+      mm.name=inp.value.trim(); inp.value=mm.name; saveMeta(mm);
+      // 同步同一张图的其他备注框和 alt
+      document.querySelectorAll(".cap").forEach(el=>{ if(el!==inp&&el.dataset.img===id) el.value=mm.name; });
+    },
+    onkeydown:e=>{
+      if(isComposing(e)) return;
+      if(e.key==="Enter"){ e.preventDefault(); inp.blur(); }
+      else if(e.key==="Escape"){ inp.value=(imgMeta.get(id)||{}).name||""; inp.blur(); }
+    }});
+  return inp;
+}
 function imageBlock(b){
   const m=b.img&&imgMeta.get(b.img);
   const acts=h("div.bact",null,
     h("button.btn.sm",{type:"button",onclick:()=>pickFile(id=>setBlockImage(b.id,id))},"上传新图"),
     h("button.btn.sm",{type:"button",onclick:()=>openGallery(id=>setBlockImage(b.id,id))},"选择已有"));
   const wrap=h("div.bimg"+(m?"":".empty"),{tabindex:0,"data-bid":b.id});
-  if(m) wrap.append(duoImg(b.img),acts);
+  if(m) wrap.append(h("div.cw",null,duoImg(b.img),acts),capInput(b.img));
   else wrap.append(h("div.dim",null,(b.img?"这张图片已被删除":"空的图片块")+" · 选中后按 Ctrl/Cmd+V 粘贴图片"),acts);
   ctl.set(b.id,{edit:()=>wrap.focus()});
   return wrap;
