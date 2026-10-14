@@ -34,7 +34,7 @@ input:focus,textarea:focus{background:var(--faint)}
 .rel{grid-column:5;grid-row:1/3;align-self:start;position:sticky;top:1rem;max-height:calc(100vh - 5rem);overflow-y:auto;scrollbar-width:none}
 .pcell{grid-column:1;grid-row:2;align-self:start;display:flex;align-items:baseline;justify-content:flex-end;padding-top:.7rem;font-size:.95rem;color:var(--dim);min-width:0}
 .pbody{grid-column:2/5;grid-row:2;min-width:0;min-height:0;display:flex;flex-direction:column;padding-top:.6rem}
-.foot{position:fixed;right:1.5rem;bottom:calc(1rem + env(safe-area-inset-bottom,0px));display:flex;align-items:center;justify-content:flex-end;gap:1rem;max-width:calc(100vw - 3rem);padding:.25rem 0 .25rem .75rem;background:var(--bg);font-size:.85rem;color:var(--dim)}
+.foot{position:fixed;right:1.5rem;bottom:calc(1rem + env(safe-area-inset-bottom,0px));display:flex;align-items:center;justify-content:flex-end;gap:1rem;max-width:calc(100vw - 3rem);padding:.25rem 0 .25rem .75rem;background:var(--bg);color:var(--dim)}
 
 /* nav columns */
 .list{position:relative;height:calc(var(--rows) * 1.75em);overflow-y:auto;scrollbar-width:none}
@@ -311,6 +311,15 @@ function loadTheme(){
   const dark=window.matchMedia&&matchMedia("(prefers-color-scheme: dark)").matches;
   setTheme(PRESETS[dark?"夜":"庭"],false);
 }
+/* ---------- font size ---------- */
+const FS_DEF=16;
+function setFontSize(px,save=true){
+  px=Math.max(12,Math.min(24,Math.round(px)||FS_DEF));
+  document.documentElement.style.fontSize=px+"px";
+  if(save) store.set("niwa.fs",String(px));
+  return px;
+}
+const loadFontSize=()=>setFontSize(Number(store.get("niwa.fs"))||FS_DEF,false);
 
 /* ---------- data layer: in-memory cache + IndexedDB ---------- */
 // stores: pages {slug,...}, images {id,blob}, imgmeta {id,w,h,bytes,dither,name,created}
@@ -1614,6 +1623,21 @@ async function exportJSON(){
 function buildSettings(body){
   const msg=h("div.dim.msg"), say=t=>{ msg.textContent=t; };
 
+  // font size
+  const fsCur=Number(store.get("niwa.fs"))||FS_DEF;
+  const fsVal=h("span.val",null,fsCur+"px");
+  const fsIn=h("input",{type:"range",min:12,max:24,step:1,value:fsCur});
+  const applyFs=v=>{
+    const n=setFontSize(v);
+    fsVal.textContent=n+"px"; fsIn.value=n;
+    document.querySelectorAll("textarea.bta").forEach(autosize);
+  };
+  fsIn.addEventListener("input",()=>{ fsVal.textContent=fsIn.value+"px"; });   // 拖动中：只更新数字
+  fsIn.addEventListener("change",()=>applyFs(+fsIn.value));                    // 松手后：真正生效
+  const fsSec=h("section",null,h("h3",null,"字号"),
+    h("div.row",null,h("span.lab",null,"基准字号"),fsIn,fsVal,
+      h("button.btn",{type:"button",onclick:()=>applyFs(FS_DEF)},"恢复默认")));
+
   // theme
   const inputs={};
   const mk=(k,label)=>{
@@ -1692,7 +1716,7 @@ function buildSettings(body){
     }},"请求持久存储")));
   checkP();
 
-  body.append(h("div.st",null,themeSec,dataSec,storeSec,msg));
+  body.append(h("div.st",null,fsSec,themeSec,dataSec,storeSec,msg));
 }
 
 /* ---------- wiring ---------- */
@@ -1717,6 +1741,7 @@ if(window.__NIWA_TEST) window.__niwa={pages,imgMeta,go,createPage,renameSlug,set
 
 (async function init(){
   loadTheme();
+  loadFontSize();
   await loadAll();
   normalize();
   curSlug=parseHash();
