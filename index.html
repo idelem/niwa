@@ -105,10 +105,10 @@ input:focus,textarea:focus{background:var(--faint)}
 .duo{display:block;width:fit-content;max-width:100%;background:var(--light);isolation:isolate;line-height:0}
 .duo img,.duo canvas{mix-blend-mode:multiply}
 .pic.px{image-rendering:pixelated}
-.bimg{padding:.2rem 0}
+.bimg{padding:.2rem 0;position:relative}
 .bimg:focus{background:var(--faint)}
 .bimg .bact{display:none;gap:.25rem;margin-top:.3rem}
-.cw{width:fit-content;max-width:100%;position:relative}
+.cw{width:fit-content;max-width:100%}
 .bimg:not(.empty) .bact{position:absolute;top:.3rem;right:.3rem;margin:0;background:var(--bg);z-index:1}
 .bimg:focus-within .bact{display:flex}
 .cap{display:block;width:100%;margin-top:.25rem;font-size:.85rem;color:var(--dim)}
@@ -1264,7 +1264,7 @@ function imageBlock(b){
     h("button.btn.sm",{type:"button",onclick:()=>pickFile(id=>setBlockImage(b.id,id))},"上传新图"),
     h("button.btn.sm",{type:"button",onclick:()=>openGallery(id=>setBlockImage(b.id,id))},"选择已有"));
   const wrap=h("div.bimg"+(m?"":".empty"),{tabindex:0,"data-bid":b.id});
-  if(m) wrap.append(h("div.cw",null,duoImg(b.img),acts),capInput(b.img));
+  if(m) wrap.append(h("div.cw",null,duoImg(b.img)),capInput(b.img),acts);
   else wrap.append(h("div.dim",null,(b.img?"这张图片已被删除":"空的图片块")+" · 选中后按 Ctrl/Cmd+V 粘贴图片"),acts);
   ctl.set(b.id,{edit:()=>wrap.focus()});
   return wrap;
